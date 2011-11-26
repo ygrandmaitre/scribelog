@@ -17,7 +17,7 @@ int main(int argc, char** argv)
   ConfigParser parser;
   ConfigParser::t_MapConfig keys;
 
-  if (!parser.parse (std::string(argv[1]), keys))
+  if (!parser.parse ("/home/riki/projet/scribelog/test.cfg" /*std::string(argv[1])*/, keys))
   {
     std::clog << "Bad config file" << std::endl;
     return 2;

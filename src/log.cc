@@ -2,8 +2,12 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <cstdlib>
 #include <iostream>
 #include <ctime>
+#include <chrono>
+#include <future>
+#include <zlib.h>
 #include "log.hh"
 
 Log::Log(const ConfigParser::t_MapConfig& config)
@@ -14,6 +18,14 @@ Log::Log(const ConfigParser::t_MapConfig& config)
 
 Log::~Log()
 {
+  for (auto it = compress_threads_.begin();
+       it != compress_threads_.end();
+       ++it)
+  {
+    std::clog << "debut join" << std::endl;
+    (*it)->join();
+    std::clog << "fin join" << std::endl;
+  }
 }
 
 bool
@@ -25,14 +37,61 @@ Log::write(const char* data, ssize_t size)
       return false;
   }
 
+  auto it_delay = config_.find("delay");
+  if (it_delay != config_.end())
+  {
+    //check delay
+    auto now = std::chrono::high_resolution_clock::now();
+    if (now - begin_ >= std::chrono::seconds(
+                                            std::atoi(it_delay->second.c_str())))
+    {
+      close(fd_);
+      compress_threads_.push_back
+      (std::unique_ptr<std::thread> (new std::thread(&Log::compress, this, filename_)));
+      if (!open())
+        return false;
+    }
+  }
+
   ::write(fd_, data, size);
 
   return true;
 }
 
+void
+Log::compress(const std::string& filename)
+{
+  std::clog << "debut" << std::endl;
+  int fd = ::open(filename.c_str(), O_RDONLY, 0666);
+  // FIXME get the compression level in config file
+  gzFile gz = gzopen((filename + ".gz").c_str(), "wb5");
+  if (gz == 0)
+  {
+    std::clog << "Couldn't create the .gz file: " << filename << ".gz" << std::endl;
+  }
+  else
+  {
+    char buffer[64 * 1024];
+    int32_t size = ::read(fd, buffer, sizeof(buffer));
+
+    while (size > 0)
+    {
+      if(gzwrite(gz, buffer, size) == 0)
+      {
+        std::clog << "gzwrite error" << std::endl;
+      }
+      size = ::read(fd, buffer, sizeof(buffer));
+    }
+    gzclose(gz);
+    ::close(fd);
+  }
+}
+
 bool
 Log::open()
 {
+  begin_ = std::chrono::high_resolution_clock::now();
+
   const auto it = config_.find("file");
   if (it == config_.end())
   {
@@ -40,7 +99,7 @@ Log::open()
     return false;
   }
 
-  // Get date
+  // Get date may be see std::put_time and std::localtime
   auto ts = ::time(0);
   struct ::tm local_tm;
   ::localtime_r(&ts, &local_tm);
@@ -48,7 +107,10 @@ Log::open()
   auto size = strftime(buffer, sizeof (buffer), "%Y%m%d-%T", &local_tm);
   std::string date(buffer, size);
 
-  int fd = ::open((date + "-" + it->second).c_str(),
+  // FIXME use stringstream
+  filename_ = date + "-" + it->second;
+
+  int fd = ::open(filename_.c_str(),
   O_WRONLY | O_CREAT | O_EXCL | O_LARGEFILE,
   S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH);
 

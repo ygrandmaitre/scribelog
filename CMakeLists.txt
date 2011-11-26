@@ -1,8 +1,15 @@
 cmake_minimum_required(VERSION 2.8)
 
-project(PimpMyLog)
-
+project(scribelog)
+find_package(ZLIB)
+if (ZLIB_FOUND)
+  include_directories(${ZLIP_INCLUDE_DIRS})
+else (ZLIB_FOUND)
+  message(FATAL_ERROR
+ "zlib is needed")
+endif (ZLIB_FOUND)
+find_package (Threads)
 include_directories(src)
-add_definitions(-Wall -W -std=c++0x)
+add_definitions(-Wall -W -std=gnu++0x)
 add_subdirectory(src)
 add_subdirectory(tests)
