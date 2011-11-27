@@ -2,6 +2,7 @@ add_definitions(-D_GLIBCXX_USE_NANOSLEEP)
 add_executable(scribelog
   main.cc
   log.cc
+  fork.cc
   configparser.cc
 )
 

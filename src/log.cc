@@ -8,6 +8,8 @@
 #include <chrono>
 #include <future>
 #include <zlib.h>
+
+#include "fork.hh"
 #include "log.hh"
 
 Log::Log(const ConfigParser::t_MapConfig& config)
@@ -18,14 +20,6 @@ Log::Log(const ConfigParser::t_MapConfig& config)
 
 Log::~Log()
 {
-  for (auto it = compress_threads_.begin();
-       it != compress_threads_.end();
-       ++it)
-  {
-    std::clog << "debut join" << std::endl;
-    (*it)->join();
-    std::clog << "fin join" << std::endl;
-  }
 }
 
 bool
@@ -46,8 +40,11 @@ Log::write(const char* data, ssize_t size)
                                             std::atoi(it_delay->second.c_str())))
     {
       close(fd_);
-      compress_threads_.push_back
-      (std::unique_ptr<std::thread> (new std::thread(&Log::compress, this, filename_)));
+      // Compress the file in a fork process
+      Fork f;
+
+      if (f.is_child ())
+        compress(filename_);
       if (!open())
         return false;
     }
@@ -85,6 +82,7 @@ Log::compress(const std::string& filename)
     gzclose(gz);
     ::close(fd);
   }
+  exit(0);
 }
 
 bool

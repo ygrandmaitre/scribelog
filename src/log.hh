@@ -24,7 +24,6 @@ class Log
     int fd_;
     std::string filename_;
     std::chrono::high_resolution_clock::time_point begin_;
-    std::list<std::unique_ptr<std::thread> > compress_threads_;
 };
 
 #endif // LOG_HH
